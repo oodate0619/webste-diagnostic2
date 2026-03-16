@@ -6,17 +6,18 @@ import plotly.graph_objects as go
 # ページ設定
 st.set_page_config(page_title="個別専用設計図ロードマップ作成", layout="wide")
 
-# カスタムCSSでフォントサイズなどを調整（X世代への配慮）
+# カスタムCSS（X世代向け：フォントサイズと視認性の向上）
 st.markdown("""
     <style>
     .main { font-size: 1.1rem; }
-    .stButton>button { width: 100%; height: 3em; font-size: 1.2rem; font-weight: bold; }
+    .stButton>button { width: 100%; height: 3.5em; font-size: 1.3rem; font-weight: bold; background-color: #007BFF; color: white; }
+    h1, h2, h3 { color: #1E1E1E; }
     </style>
     """, unsafe_allow_html=True)
 
 # タイトル
 st.title("🛡️ 個別専用設計図ロードマップ作成")
-st.write("あなたの人生経験を『稼げる型』へ変換し、最短ルートを確定させます。")
+st.write("あなたの人生経験から『稼げる型』を特定し、最短ルートを確定させます。")
 
 # セッション状態の初期化
 if 'step' not in st.session_state:
@@ -52,24 +53,24 @@ if st.session_state.step >= 2:
         st.subheader("【作業】従来の労働型ライター")
         old_price = 3000 
         old_time = 3.0
-        st.markdown(f"* 執筆：3,000文字 [cite: 5, 38]")
-        st.markdown(f"* 作業時間：{old_time}時間 [cite: 4, 38]")
-        st.markdown(f"* 報酬：**{old_price:,}円** [cite: 5, 38]")
-        st.markdown(f"### 👉 時給：{old_price/old_time:,.0f}円 [cite: 2, 38]")
+        st.markdown(f"* 執筆：3,000文字")
+        st.markdown(f"* 作業時間：{old_time}時間")
+        st.markdown(f"* 報酬：**{old_price:,}円**")
+        st.markdown(f"### 👉 時給：{old_price/old_time:,.0f}円")
 
     with col2:
         st.subheader("【設計】ウェブステ流・次世代設計士")
         new_package_price = st.number_input("設計＋画像＋3,000文字執筆の総報酬（推奨：1.8万円以上）", value=18000)
-        # 労働時間の選択式への変更
+        # 選択式への変更
         time_options = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
         new_time = st.selectbox("実労働時間（AI執筆＋Canva図解＋設計の合計）を選択してください", time_options, index=2)
         
         hourly_rate_new = new_package_price / new_time
-        st.markdown(f"* 執筆：3,000文字（AIフル活用） [cite: 4, 11]")
-        st.markdown(f"* 図解：プロ級画像3枚セット（Canva活用） [cite: 4, 11]")
-        st.markdown(f"### 👉 予測時給：{hourly_rate_new:,.0f}円 [cite: 4, 38]")
+        st.markdown(f"* 執筆：3,000文字（AIフル活用）")
+        st.markdown(f"* 図解：プロ級画像3枚セット（Canva活用）")
+        st.markdown(f"### 👉 予測時給：{hourly_rate_new:,.0f}円")
 
-    # 時給比較グラフの視認性向上
+    # 時給比較グラフ (エラー回避のため記述を厳密化)
     st.latex(r'''
     \text{時給逆転の法則} = \frac{\text{（文章報酬 + 画像報酬 + 設計報酬）}}{\text{AI活用による実作業時間}}
     ''')
@@ -83,11 +84,18 @@ if st.session_state.step >= 2:
         textfont=dict(size=20),
         textposition='auto'
     ))
+    
+    # y軸とx軸の設定を安全な辞書形式に修正
     fig.update_layout(
         height=500,
-        yaxis=dict(title="時給（円）", titlefont=dict(size=18), tickfont=dict(size=16)),
-        xaxis=dict(tickfont=dict(size=18)),
-        margin=dict(l=20, r=20, t=20, b=20)
+        yaxis=dict(
+            title=dict(text="時給（円）", font=dict(size=18)),
+            tickfont=dict(size=16)
+        ),
+        xaxis=dict(
+            tickfont=dict(size=18)
+        ),
+        margin=dict(l=40, r=40, t=40, b=40)
     )
     st.plotly_chart(fig, use_container_width=True)
     
@@ -98,7 +106,7 @@ if st.session_state.step >= 2:
 if st.session_state.step >= 3:
     st.divider()
     st.header("STEP 3: 3ヶ月間のロードマップ")
-    st.write("意志力に頼らず「環境」で稼ぐ。最短距離の工程表です。 [cite: 8]")
+    st.write("意志力に頼らず「環境」で稼ぐ。最短距離の工程表です。")
     
     df_roadmap = pd.DataFrame([
         dict(Task="Phase 1: 企業案件潜入・型のコピー", Start='2026-04-01', Finish='2026-05-01', Resource='実績獲得'),
@@ -106,13 +114,29 @@ if st.session_state.step >= 3:
         dict(Task="Phase 3: 盗んだ型で自分の資産建築", Start='2026-06-01', Finish='2026-07-01', Resource='労働卒業')
     ])
     
-    # ガントチャートの文字サイズ拡大
-    fig_roadmap = px.timeline(df_roadmap, x_start="Start", x_end="Finish", y="Task", color="Resource", template="plotly_white")
+    # ガントチャートの視認性向上
+    fig_roadmap = px.timeline(
+        df_roadmap, 
+        x_start="Start", 
+        x_end="Finish", 
+        y="Task", 
+        color="Resource", 
+        template="plotly_white",
+        labels={"Task": ""}
+    )
+    
+    # 軸の文字を大きく、フェーズ名を見やすく調整
     fig_roadmap.update_layout(
-        height=400,
-        font=dict(size=18), # 全体的なフォントサイズを大きく
-        xaxis=dict(title="2026年 収益化スケジュール", titlefont=dict(size=20), tickfont=dict(size=16)),
-        yaxis=dict(title="", tickfont=dict(size=18)), # フェーズの文字を大きく
+        height=450,
+        font=dict(size=18), 
+        xaxis=dict(
+            title=dict(text="収益化スケジュール", font=dict(size=20)),
+            tickfont=dict(size=16)
+        ),
+        yaxis=dict(
+            tickfont=dict(size=20), # フェーズ1〜3の文字をさらに大きく
+            autorange="reversed" # Phase 1を上に
+        ),
         showlegend=False
     )
     st.plotly_chart(fig_roadmap, use_container_width=True)
@@ -124,13 +148,13 @@ if st.session_state.step >= 3:
 if st.session_state.step >= 4:
     st.divider()
     st.header("STEP 4: やらないことリスト（迷いの排除）")
-    st.write("成功を確実にするため、これまでの「稼げない習慣」をここで断ち切ります。 [cite: 2, 4]")
+    st.write("成功を確実にするため、これまでの「稼げない習慣」をここで断ち切ります。")
     
     st.warning("以下の項目をチェックし、プロとしての『設計図』を確定させてください。")
-    st.checkbox("文字単価1円未満の『労働案件』を一切受けない [cite: 5, 11]", value=True)
-    st.checkbox("AIを筆にせず、0から自分で文章をひねり出すのをやめる [cite: 13, 21]", value=True)
-    st.checkbox("テンプレートを使わず、センスでデザインしようとするのを止める [cite: 13, 36]", value=True)
-    st.checkbox("自分の判断で『ズレた努力』を続けるのを止める [cite: 4, 30]", value=True)
-    st.checkbox("一人で30分以上悩むことを禁止する（即、プロに相談・フィードバックを得る） [cite: 4, 18]", value=True)
+    st.checkbox("文字単価1円未満の『労働案件』を一切受けない", value=True)
+    st.checkbox("AIを筆にせず、0から自分で文章をひねり出すのをやめる", value=True)
+    st.checkbox("テンプレートを使わず、センスでデザインしようとするのを止める", value=True)
+    st.checkbox("自分の判断で『ズレた努力』を続けるのを止める", value=True)
+    st.checkbox("一人で30分以上悩むことを禁止する（即、プロに相談・フィードバックを得る）", value=True)
 
     st.success("🎉 おめでとうございます。あなた専用の設計図が完成しました。個別相談にて、この『ルート』の検収と詳細プランを確定させましょう。")
