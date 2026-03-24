@@ -1,246 +1,790 @@
-import streamlit as st
-import pandas as pd
+import math
+from typing import List, Tuple
+
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import time
+import streamlit as st
 
-# --- ページ設定と白基調の洗練されたUI ---
-st.set_page_config(page_title="個別専用設計図・ロードマップ作成", layout="centered", initial_sidebar_state="collapsed")
 
-st.markdown("""
+st.set_page_config(
+    page_title="個別専用キャリア設計図ロードマップ作成",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
+
+st.markdown(
+    """
     <style>
     html, body, [class*="css"]  {
         font-family: 'Helvetica Neue', Helvetica, Arial, 'Hiragino Sans', sans-serif;
-        color: #333333;
+        color: #243447;
     }
     .stApp {
-        background-color: #FAFAFA;
+        background-color: #F7F8FA;
     }
     h1, h2, h3 {
-        color: #1A365D;
+        color: #17324D;
+        letter-spacing: 0.2px;
+    }
+    .lead {
+        font-size: 17px;
+        line-height: 1.8;
+        color: #425466;
+    }
+    .card {
+        background: #FFFFFF;
+        border: 1px solid #E6E8EC;
+        border-radius: 16px;
+        padding: 18px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(16, 24, 40, 0.04);
+    }
+    .mini-card {
+        background: #FFFFFF;
+        border: 1px solid #E6E8EC;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    .caption {
+        font-size: 13px;
+        color: #6B7280;
+    }
+    .em {
+        color: #C77D1A;
         font-weight: 700;
-        letter-spacing: 1.0px;
     }
-    .big-font {
-        font-size: 18px !important;
-        line-height: 1.7;
-        color: #4A5568;
+    .section-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #17324D;
+        margin-top: 10px;
+        margin-bottom: 8px;
     }
-    .highlight {
-        color: #D69E2E;
-        font-weight: bold;
-    }
-    .stButton>button {
+    .stButton > button {
         width: 100%;
-        background-color: #1A365D;
-        color: #FFFFFF;
-        font-size: 20px;
-        font-weight: bold;
-        padding: 12px;
-        border-radius: 6px;
+        border-radius: 12px;
+        background: #17324D;
+        color: white;
+        font-weight: 700;
         border: none;
-        transition: all 0.3s;
+        padding: 0.8rem 1rem;
+        font-size: 18px;
     }
-    .stButton>button:hover {
-        background-color: #2B6CB0;
-        color: #FFFFFF;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    label {
-        font-size: 16px !important;
-        color: #2D3748 !important;
-        font-weight: bold;
-    }
-    .step-box {
-        background-color: #FFFFFF;
-        padding: 20px;
-        border-left: 5px solid #1A365D;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    .stButton > button:hover {
+        background: #25496E;
+        color: white;
     }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-# --- セッションステート ---
-if 'step1_done' not in st.session_state:
-    st.session_state.step1_done = False
-if 'step2_done' not in st.session_state:
-    st.session_state.step2_done = False
-if 'step3_done' not in st.session_state:
-    st.session_state.step3_done = False
 
-# --- ヘッダー ---
-st.title("🛡️ 個別専用設計図・ロードマップ作成")
-st.markdown("<p class='big-font'>あなたの過去の経験は、企業が予算を投じてでも欲しがる「資産」です。<br>労働の延長線上ではなく、AIとデザインを駆使し、確実な収益を積み上げる『別レール』へのルートを証明します。</p>", unsafe_allow_html=True)
-st.divider()
-
-# ==========================================
-# STEP 1：資産の言語化（ハードルを下げ、具体性を上げる）
-# ==========================================
-st.header("STEP 1: 隠された資産の言語化")
-st.markdown("<p class='big-font'>現在の、または過去の職種を選択してください。</p>", unsafe_allow_html=True)
-
-job_options = [
-    "選択してください",
-    "看護師・医療職・介護",
-    "工場勤務・技術職・夜勤",
-    "一般事務・管理部門",
-    "その他（未言語化の経験）"
+JOB_OPTIONS = [
+    "会社員",
+    "パート",
+    "アルバイト",
+    "主婦",
+    "営業職",
+    "事務職",
+    "接客販売",
+    "医療従事者",
+    "介護福祉職",
+    "工場勤務",
+    "教育",
+    "保育",
+    "美容",
+    "サロン",
+    "ジム・フィットネス関連",
+    "フリーランス",
+    "自営業",
+    "その他",
 ]
 
-selected_job = st.selectbox("", job_options, key="job_select")
+EXPERIENCE_OPTIONS = [
+    "ブログ執筆",
+    "記事作成",
+    "SNS投稿",
+    "SNS運用",
+    "ライティング",
+    "リライト",
+    "要約",
+    "情報整理",
+    "リサーチ",
+    "画像作成",
+    "Canva",
+    "デザイン",
+    "チラシ作成",
+    "資料作成",
+    "マニュアル作成",
+    "Excel・スプレッドシート",
+    "データ入力",
+    "会議メモ・議事録",
+    "接客",
+    "販売",
+    "営業",
+    "電話対応",
+    "問い合わせ対応",
+    "教える・指導する",
+    "研修・教育",
+    "医療知識の説明",
+    "介護現場の説明",
+    "子育て経験の発信",
+    "美容・健康の情報発信",
+    "写真撮影",
+    "動画編集",
+    "AI使用経験",
+    "ChatGPT使用経験",
+]
 
-if selected_job != "選択してください":
-    st.session_state.step1_done = True
-    
-    st.markdown("### 💎 あなたの経験が『高単価な価値』に変わる具体的な業務")
-    if selected_job == "看護師・医療職・介護":
-        st.markdown("""
-        - **患者さんに説明している感覚で書く「健康コラム」の執筆**（医療の知識が少しあるだけで、企業からはプロとして重宝されます）
-        - **新人スタッフに教えていた内容をCanvaで「マニュアル図解」にするだけ**（現場の痛みがわかるあなたにしか作れない資産です）
-        - **「専門用語」をAIに放り込み、素人でもわかる言葉に変換する作業**（ゼロから文章を考える必要はありません）
-        """)
-    elif selected_job == "工場勤務・技術職・夜勤":
-        st.markdown("""
-        - **普段やっている「安全確認」のポイントを、スマホで見やすい画像にまとめる作業**（製造業の企業が喉から手が出るほど欲しい資料です）
-        - **「きつい・汚い」のイメージを払拭する、現場目線のリアルな求人記事の作成**（AIが綺麗な文章に整えてくれます）
-        - **文字だらけの古い作業手順書を、Canvaのテンプレートに当てはめて見やすくするだけ**
-        """)
-    elif selected_job == "一般事務・管理部門":
-        st.markdown("""
-        - **社内でよく聞かれる「これどうやるの？」を、AIとCanvaで1枚の画像（FAQ）にするだけ**
-        - **普段エクセルでまとめているデータを、直感的にわかる「業務フロー図」に変換**（DX化を進めたい企業が高値で買い取ります）
-        - **AIを使って、バラバラな会議の議事録や社内ルールを綺麗に整理する作業**
-        """)
+REASON_OPTIONS = [
+    "独学の試行錯誤を終わらせたい",
+    "自分に合うテーマや方向性を明確にしたい",
+    "自分の経験がどんな仕事に変わるのか知りたい",
+    "AI×Canva×ライティングを実務で使える形にしたい",
+    "3ヶ月以内に収益の土台を作りたい",
+    "企業案件で型を学びながら自分の資産にもつなげたい",
+    "書くだけではなく設計・整理・改善側に回りたい",
+    "体力勝負ではない働き方に切り替えたい",
+    "将来の収入不安に備えたい",
+    "家事・育児・仕事と両立できる別レールを作りたい",
+    "自分一人で判断し続けるやり方を終わらせたい",
+    "個別に設計されたロードマップで進みたい",
+]
+
+GOAL_OPTIONS = [
+    "半年以内に月3〜5万円の副収入の土台を作りたい",
+    "1年以内に月10万円以上を安定して目指したい",
+    "会社以外の収入源を持ちたい",
+    "在宅でも続けやすい働き方を作りたい",
+    "自分のブログやSNSも資産化したい",
+    "自分の経験を価値に変えられる働き方に移行したい",
+    "将来的にフリーランスや独立も視野に入れたい",
+    "子育てや家庭と両立しながら積み上げたい",
+    "親の介護や将来の生活不安に備えたい",
+    "今の仕事を続けながら次のレールを準備したい",
+]
+
+REGION_OPTIONS = [
+    "北海道",
+    "東北",
+    "関東",
+    "中部",
+    "近畿",
+    "中国",
+    "四国",
+    "九州",
+    "沖縄",
+    "海外",
+    "その他",
+]
+
+AGE_OPTIONS = [
+    "20代前半",
+    "20代後半",
+    "30代前半",
+    "30代後半",
+    "40代前半",
+    "40代後半",
+    "50代前半",
+    "50代後半",
+    "60代以上",
+]
+
+GENDER_OPTIONS = ["女性", "男性", "その他", "回答しない"]
+MARITAL_OPTIONS = ["未婚", "既婚", "その他"]
+CHILD_OPTIONS = ["いない", "いる"]
+CHILD_COUNT_OPTIONS = ["0", "1", "2", "3", "4人以上"]
+
+BLOG_HAVE_OPTIONS = ["持っている", "持っていない"]
+BLOG_HISTORY_OPTIONS = [
+    "まだ始めていない",
+    "1ヶ月未満",
+    "1〜3ヶ月",
+    "3〜6ヶ月",
+    "6ヶ月〜1年",
+    "1〜2年",
+    "2年以上",
+]
+
+SIDE_HISTORY_OPTIONS = [
+    "まだ取り組んでいない",
+    "1ヶ月未満",
+    "1〜3ヶ月",
+    "3〜6ヶ月",
+    "6ヶ月〜1年",
+    "1〜2年",
+    "2年以上",
+]
+
+REVENUE_OPTIONS = [
+    "0円",
+    "1円〜5,000円",
+    "5,001円〜1万円",
+    "1万〜3万円",
+    "3万〜5万円",
+    "5万〜10万円",
+    "10万〜30万円",
+    "30万円以上",
+]
+
+ANNUAL_INCOME_OPTIONS = [
+    "200万円未満",
+    "200万〜300万円",
+    "300万〜400万円",
+    "400万〜500万円",
+    "500万〜700万円",
+    "700万〜1,000万円",
+    "1,000万円以上",
+    "回答しない",
+]
+
+HOUSEHOLD_INCOME_OPTIONS = [
+    "300万円未満",
+    "300万〜500万円",
+    "500万〜700万円",
+    "700万〜1,000万円",
+    "1,000万円以上",
+    "回答しない",
+]
+
+SAVINGS_OPTIONS = [
+    "50万円未満",
+    "50万〜100万円",
+    "100万〜300万円",
+    "300万〜500万円",
+    "500万〜1,000万円",
+    "1,000万円以上",
+    "回答しない",
+]
+
+TARGET_INCOME_OPTIONS = {
+    "月3万円": 30000,
+    "月5万円": 50000,
+    "月10万円": 100000,
+    "月15万円": 150000,
+    "月20万円": 200000,
+}
+
+
+if "generated" not in st.session_state:
+    st.session_state.generated = False
+
+
+def unique_keep_order(items: List[str]) -> List[str]:
+    seen = set()
+    result = []
+    for item in items:
+        if item and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def experience_score(experiences: List[str], side_history: str, current_revenue: str, best_revenue: str) -> int:
+    score = len(experiences)
+
+    if side_history in ["3〜6ヶ月", "6ヶ月〜1年"]:
+        score += 2
+    elif side_history in ["1〜2年", "2年以上"]:
+        score += 4
+
+    if current_revenue in ["1万〜3万円", "3万〜5万円"]:
+        score += 2
+    elif current_revenue in ["5万〜10万円", "10万〜30万円", "30万円以上"]:
+        score += 4
+
+    if best_revenue in ["1万〜3万円", "3万〜5万円"]:
+        score += 1
+    elif best_revenue in ["5万〜10万円", "10万〜30万円", "30万円以上"]:
+        score += 3
+
+    return score
+
+
+def get_experience_multiplier(score: int) -> float:
+    if score <= 3:
+        return 0.90
+    if score <= 7:
+        return 1.00
+    if score <= 12:
+        return 1.10
+    return 1.18
+
+
+def hours_to_ceiling(hours: float) -> int:
+    base_map = {
+        0.5: 18000,
+        1.0: 30000,
+        1.5: 42000,
+        2.0: 55000,
+        2.5: 70000,
+        3.0: 85000,
+        3.5: 100000,
+        4.0: 120000,
+        4.5: 135000,
+        5.0: 150000,
+    }
+    return base_map.get(hours, 55000)
+
+
+def build_simulation(target_income: int, work_hours: float, score: int) -> Tuple[List[str], List[int], int, bool]:
+    months = ["1ヶ月目", "2ヶ月目", "3ヶ月目", "4ヶ月目", "5ヶ月目", "6ヶ月目"]
+    ceiling = int(hours_to_ceiling(work_hours) * get_experience_multiplier(score))
+    progress = [0.22, 0.48, 0.68, 0.82, 0.93, 1.00]
+    forecast = [int(round(ceiling * p / 1000) * 1000) for p in progress]
+    can_hit = ceiling >= target_income
+    return months, forecast, ceiling, can_hit
+
+
+def pick_entry_tasks(job: str, experiences: List[str]) -> List[Tuple[str, str]]:
+    tasks: List[Tuple[str, str]] = []
+
+    def add(title: str, desc: str) -> None:
+        tasks.append((title, desc))
+
+    job_map = {
+        "会社員": [
+            ("社内向けFAQ・説明資料の整理", "普段の業務でよく聞かれることを、1枚資料や簡易マニュアルに落とし込む仕事から入りやすいです。"),
+            ("比較表・導線整理", "情報を並べて整理する力がそのまま企業の資料改善に転用しやすいです。"),
+        ],
+        "パート": [
+            ("店舗・サービスの説明整理", "お客様目線で分かりやすく言い換える仕事に変えやすいです。"),
+            ("口コミ・レビュー整理", "現場感のある言葉で、選ばれる理由を整える仕事につなげやすいです。"),
+        ],
+        "アルバイト": [
+            ("接客導線の見直し資料", "現場で詰まりやすい箇所を見つけて、分かりやすく直す役割から入りやすいです。"),
+            ("求人向けの現場説明コンテンツ", "仕事内容をやさしく伝える文章や図解に変えやすいです。"),
+        ],
+        "主婦": [
+            ("生活者目線の比較記事・レビュー構成", "家事・子育て・買い物のリアルな視点が、そのまま信頼される一次情報になります。"),
+            ("やさしい説明資料づくり", "難しい内容を日常の言葉で置き換える役割に向いています。"),
+        ],
+        "営業職": [
+            ("提案資料・比較表の改善", "相手が判断しやすい並べ方や伝え方が、そのまま価値になります。"),
+            ("商談後の要点整理", "会話を整理して、次の行動に落とす仕事に変えやすいです。"),
+        ],
+        "事務職": [
+            ("業務フロー・マニュアル整備", "手順を抜け漏れなく整理する力が、そのまま高単価な裏方業務になります。"),
+            ("議事録・情報整理の再構成", "バラバラな情報をまとめ直して、見やすい形にする仕事が狙いやすいです。"),
+        ],
+        "接客販売": [
+            ("FAQ・接客トーク整理", "よく聞かれる質問や案内の型を整える仕事に転用しやすいです。"),
+            ("商品比較・導線改善", "迷うポイントが分かる人ほど、選びやすい導線を作れます。"),
+        ],
+        "医療従事者": [
+            ("健康系コラム・説明資料", "専門知識を難しくしすぎず伝え直す仕事に向いています。"),
+            ("患者向けのやさしい図解", "専門用語をやさしい言葉に変えて整理する力が価値になります。"),
+        ],
+        "介護福祉職": [
+            ("介護現場の説明コンテンツ", "現場のリアルがわかる人しか書けない内容を企業向けに変えられます。"),
+            ("採用向けの現場紹介記事", "きつさだけでなくやりがいも伝えられる一次情報が強みになります。"),
+        ],
+        "工場勤務": [
+            ("作業手順書の見やすい再設計", "古い手順書を、スマホで見やすい図解やチェック形式に変える仕事に入りやすいです。"),
+            ("安全確認・求人向け現場説明", "現場の空気感を知っている人の言葉は採用広報で強いです。"),
+        ],
+        "教育": [
+            ("教材・説明スライド整理", "伝える順番を整える力が、そのまま企業の教育資料改善に変わります。"),
+            ("初心者向けの解説コンテンツ", "難しい内容を段階的に伝える仕事に向いています。"),
+        ],
+        "保育": [
+            ("保護者向けの説明資料", "やさしい言い換えと安心感のある伝え方が強みになります。"),
+            ("子ども・家庭向けコンテンツ", "生活に根ざした視点がそのまま価値になります。"),
+        ],
+        "美容": [
+            ("メニュー説明・比較導線", "選ばれる理由を見える化する資料やSNS導線改善に入りやすいです。"),
+            ("美容体験をもとにした発信設計", "体感のある言葉が、企業の販促コンテンツに転用しやすいです。"),
+        ],
+        "サロン": [
+            ("来店前の不安を減らすFAQ", "初回のお客様が迷うポイントを整えるコンテンツに向いています。"),
+            ("継続導線の見直し", "来店後の案内や提案内容を見直す仕事につなげやすいです。"),
+        ],
+        "ジム・フィットネス関連": [
+            ("初心者向けの説明資料・比較表", "入会前に迷う点を整理する役割に向いています。"),
+            ("健康・運動習慣の発信補助", "現場感のある文章や図解にしやすいです。"),
+        ],
+        "フリーランス": [
+            ("提案資料の改善", "すでにお客様目線があるので、情報整理と提案設計に寄せやすいです。"),
+            ("既存実績の再編集", "事例整理や見せ方改善で単価アップに接続しやすいです。"),
+        ],
+        "自営業": [
+            ("自社の強み整理・比較表作成", "お客様が迷うポイントを潰す資料づくりに向いています。"),
+            ("既存導線の言語化", "来店・問い合わせまでの流れを整える仕事に変えやすいです。"),
+        ],
+        "その他": [
+            ("日常業務の見える化", "今まで当たり前にやってきたことを、企業向けのノウハウや説明資料に変える入口から始めやすいです。"),
+            ("AIを使った情報整理", "ゼロから作るより、既存情報を整理し直す仕事から入る方が現実的です。"),
+        ],
+    }
+
+    for item in job_map.get(job, job_map["その他"]):
+        add(*item)
+
+    if "Canva" in experiences or "デザイン" in experiences or "画像作成" in experiences:
+        add("1枚図解・スライド化", "文章だけでなく、見るだけで伝わる形にする仕事まで広げやすいです。")
+    if "AI使用経験" in experiences or "ChatGPT使用経験" in experiences or "要約" in experiences:
+        add("AIを使った下書き整理", "ゼロから書くより、AIで叩き台を作り、整えて仕上げる流れが合っています。")
+    if "ブログ執筆" in experiences or "記事作成" in experiences or "ライティング" in experiences:
+        add("企業ブログ・コラム構成", "まずは構成と見出しづくりから入り、徐々に改善提案まで寄せる動きが取りやすいです。")
+    if "情報整理" in experiences or "資料作成" in experiences or "Excel・スプレッドシート" in experiences:
+        add("比較表・業務整理資料", "整理力そのものが価値になりやすく、初心者でも入り口を作りやすい分野です。")
+    if "接客" in experiences or "販売" in experiences or "問い合わせ対応" in experiences or "営業" in experiences:
+        add("お客様目線の導線改善", "何で迷うか、どこで離脱するかが分かる人は、導線の改善提案に強いです。")
+
+    unique_titles = set()
+    unique_tasks: List[Tuple[str, str]] = []
+    for title, desc in tasks:
+        if title not in unique_titles:
+            unique_titles.add(title)
+            unique_tasks.append((title, desc))
+    return unique_tasks[:5]
+
+
+def build_strength_summary(job: str, experiences: List[str], career_text: str) -> str:
+    strengths = []
+
+    if job in ["事務職", "会社員", "営業職", "フリーランス", "自営業"]:
+        strengths.append("情報を整理して、相手が判断しやすい形に直す力")
+    if job in ["接客販売", "パート", "アルバイト", "営業職", "サロン", "美容", "ジム・フィットネス関連"]:
+        strengths.append("相手が迷うポイントや不安を先回りして言葉にする力")
+    if job in ["医療従事者", "介護福祉職", "教育", "保育"]:
+        strengths.append("難しいことを、わかりやすく伝え直す力")
+    if job in ["工場勤務"]:
+        strengths.append("現場の手順や安全確認を、抜け漏れなく扱う力")
+    if job in ["主婦"]:
+        strengths.append("生活者としてのリアルな視点で、選ぶ理由や続ける理由を言葉にする力")
+
+    if "Canva" in experiences or "デザイン" in experiences:
+        strengths.append("文章だけでなく、視覚的に伝える形まで整えられる力")
+    if "AI使用経験" in experiences or "ChatGPT使用経験" in experiences:
+        strengths.append("叩き台を早く作り、仕上げに集中できる力")
+    if "ブログ執筆" in experiences or "SNS運用" in experiences:
+        strengths.append("発信を継続しやすいテーマや切り口を見つける力")
+    if "情報整理" in experiences or "資料作成" in experiences:
+        strengths.append("散らかった情報を、見やすく整える力")
+
+    strengths = unique_keep_order(strengths)
+    if not strengths:
+        strengths = ["今まで当たり前にやってきたことを、企業向けの形に置き換える力"]
+
+    career_hint = career_text.strip()
+    if career_hint:
+        return f"{job}としての経験や『{career_hint[:40]}』の文脈を見ると、{ '、'.join(strengths[:3]) }が強みとして活かしやすい状態です。"
+    return f"{job}としての経験を見ると、{ '、'.join(strengths[:3]) }が強みとして活かしやすい状態です。"
+
+
+def pick_markets(job: str, hobbies: str, reasons: List[str]) -> List[str]:
+    markets = []
+
+    job_to_market = {
+        "医療従事者": ["医療・健康", "クリニック", "採用広報"],
+        "介護福祉職": ["介護", "福祉", "採用広報"],
+        "教育": ["教育", "研修", "学習支援"],
+        "保育": ["子育て", "保育", "家庭向けサービス"],
+        "美容": ["美容", "サロン", "EC・レビュー"],
+        "サロン": ["美容", "店舗集客", "リピート導線"],
+        "ジム・フィットネス関連": ["フィットネス", "健康習慣", "入会導線"],
+        "接客販売": ["店舗集客", "口コミ改善", "比較・導線"],
+        "営業職": ["BtoBサービス", "比較表", "提案資料"],
+        "事務職": ["バックオフィス", "業務改善", "マニュアル整備"],
+        "工場勤務": ["製造業", "採用広報", "安全教育"],
+        "主婦": ["生活情報", "子育て", "レビュー"],
+    }
+    markets.extend(job_to_market.get(job, ["業務整理", "情報発信", "比較・説明コンテンツ"]))
+
+    hobby_lower = hobbies.lower()
+    if any(word in hobby_lower for word in ["美容", "コスメ", "スキンケア"]):
+        markets.append("美容・レビュー")
+    if any(word in hobby_lower for word in ["旅行", "ホテル", "おでかけ"]):
+        markets.append("旅行・比較")
+    if any(word in hobby_lower for word in ["料理", "食", "レシピ"]):
+        markets.append("食・暮らし")
+    if any(word in hobby_lower for word in ["子育て", "育児"]):
+        markets.append("子育て")
+    if any(word in hobby_lower for word in ["健康", "運動", "ジム"]):
+        markets.append("健康・運動")
+
+    if "自分のブログやSNSも資産化したい" in reasons:
+        markets.append("自分資産につながる発信テーマ")
+    if "企業案件で型を学びながら自分の資産にもつなげたい" in reasons:
+        markets.append("企業案件→自分資産へ移植しやすい分野")
+
+    return unique_keep_order(markets)[:5]
+
+
+def build_roadmap(work_hours: float, blog_have: str, side_history: str, exp_score_value: int) -> List[Tuple[str, str]]:
+    phase1 = (
+        "0〜30日",
+        "まずは『何を売るか』ではなく、『何を整理できる人か』を固めます。AIで下書きを作り、Canvaや文章で見やすく整える型を1つ身につけ、最初の納品サンプルを1〜2個作る段階です。",
+    )
+
+    if side_history in ["まだ取り組んでいない", "1ヶ月未満"]:
+        phase2_text = "小さな案件や模擬案件で、FAQ整理・比較表・記事構成・1枚図解のどれか1つに絞って納品経験を作ります。ここでは完璧さより、型に沿って最後まで出すことを優先します。"
     else:
-        st.markdown("""
-        - **あなたが「当たり前」にやってきた日常業務を、AIが「企業向けのノウハウ」に変換します**
-        - **ゼロからスキルを学ぶのではなく、今ある知識をCanvaのテンプレートに流し込むだけで「売れる商品」になります**
-        """)
-    
-    st.markdown("<p class='big-font' style='margin-top:15px;'>難しい専門知識や、ゼロからのクリエイティブな発想は不要です。<b>「あなたの当たり前」をAIと型で整えるだけ</b>で、高単価な案件へと変わります。</p>", unsafe_allow_html=True)
-    st.divider()
+        phase2_text = "すでにある経験を活かして、単発作業ではなく『継続しやすい整理・改善業務』へ寄せます。既存の発信や実績を、企業案件用の見せ方に直していく段階です。"
 
-# ==========================================
-# STEP 2：収益シミュレーション（現実的な単価とわかりやすいグラフ）
-# ==========================================
-if st.session_state.step1_done:
-    st.header("STEP 2: 収益シミュレーション")
-    st.markdown("<p class='big-font'>次世代設計士の報酬は、労働時間ではなく「納品価値」で決まります。<br>1案件の報酬は、初心者でも現実的な <span class='highlight'>10,000円〜15,000円</span>（今回は平均12,000円で計算）をベースにします。<br>あなたの1日の確保可能時間を教えてください。</p>", unsafe_allow_html=True)
-    
-    work_hours = st.slider("1日に確保できる平均作業時間（時間）", min_value=1.0, max_value=4.0, value=2.0, step=0.5)
-    
-    if st.button("資産構築の軌道をシミュレーションする"):
-        st.session_state.step2_done = True
-        
-        with st.spinner('現実的な収益軌道を計算中...'):
-            time.sleep(1)
-            
-    if st.session_state.step2_done:
-        monthly_hours = work_hours * 20
-        months = ["1ヶ月目", "2ヶ月目", "3ヶ月目", "4ヶ月目", "5ヶ月目", "6ヶ月目"]
-        
-        # 初心者が6ヶ月以内で成長する現実的な時間短縮モデル（1案件15時間 → 4時間）
-        time_per_project = [15.0, 11.0, 8.0, 6.0, 5.0, 4.0] 
-        base_reward = 12000 # 1案件12,000円
-        
-        revenue_per_month = [(monthly_hours / t) * base_reward for t in time_per_project]
-        hourly_rate = [base_reward / t for t in time_per_project]
-        
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        # マウスオーバー時（ホバー）の数値を分かりやすく整形
-        fig.add_trace(
-            go.Bar(
-                x=months, y=revenue_per_month, name="月間収益額 (円)", 
-                marker_color='#1A365D', opacity=0.8,
-                hovertemplate='%{x}<br>月間収益: <b>%{y:,.0f}円</b><extra></extra>'
-            ),
-            secondary_y=False,
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=months, y=hourly_rate, name="実質的な時間単価 (円/時)", 
-                mode='lines+markers', line=dict(color='#D69E2E', width=4), marker=dict(size=10),
-                hovertemplate='%{x}<br>時間単価: <b>%{y:,.0f}円/時</b><extra></extra>'
-            ),
-            secondary_y=True,
-        )
-        
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            legend=dict(x=0.01, y=0.99, bgcolor='rgba(255,255,255,0.8)', font=dict(color='#333')),
-            margin=dict(l=40, r=40, t=40, b=40),
-            hovermode="x unified"
-        )
-        fig.update_xaxes(showgrid=False, color='#333')
-        fig.update_yaxes(title_text="<b>月間収益額 (円)</b>", secondary_y=False, color='#1A365D', showgrid=True, gridcolor='rgba(0,0,0,0.1)', tickformat=",d")
-        fig.update_yaxes(title_text="<b>実質的な時間単価 (円/時)</b>", secondary_y=True, color='#D69E2E', showgrid=False, tickformat=",d")
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        final_revenue = int(revenue_per_month[-1])
-        st.markdown(f"""
-        <div style='background-color: #F7FAFC; padding: 15px; border-radius: 8px; border: 1px solid #E2E8F0;'>
-            <p class='big-font' style='margin-bottom:0;'>【解説】<br>
-            初心者の場合、最初はツールの操作や型に慣れるため、1日{work_hours}時間稼働しても1ヶ月目の収益は数万円程度です。<br><br>
-            しかし、AIの活用とCanvaのテンプレート（型）に慣れるにつれ、作業スピードは劇的に上がります。<b>毎日同じ「1日{work_hours}時間」の稼働であっても、6ヶ月以内には月収 <span class='highlight'>{final_revenue:,}円</span> ベースに到達することが現実的に可能です。</b><br><br>
-            「働く時間を増やす」のではなく、「同じ時間で生み出せる価値（収益額）を増やす」こと。これが労働の延長線上ではない、ウェブステが提唱する別レールの働き方です。</p>
+    if work_hours <= 1.0:
+        phase3_text = "時間が限られる前提なので、毎日少しずつ進められる業務に寄せるのが重要です。6ヶ月でまずは月3万円前後の土台を安定させ、その後に単価より継続性を優先して積み上げます。"
+    elif work_hours <= 2.0:
+        phase3_text = "平日夜の積み上げで、3ヶ月時点で月3〜5万円の現実ラインを狙い、6ヶ月で継続案件を持つ形に寄せるのが現実的です。ここで『書くだけ』ではなく、整理・構成・図解まで触れると伸びやすいです。"
+    else:
+        phase3_text = "稼働時間を取りやすいので、記事・図解・導線改善のように複数の納品パターンを持ちやすい状態です。6ヶ月時点で継続案件を複数持ち、企業案件で学んだ型を自分資産へ移す動きを並行できます。"
+
+    phase3 = ("31〜90日", phase2_text)
+    phase4 = ("3〜6ヶ月", phase3_text)
+
+    roadmap = [phase1, phase3, phase4]
+
+    if blog_have == "持っている":
+        roadmap.append(("資産接続", "企業案件で使った構成や導線の型を、自分のブログやSNSにも移植します。自分の発信を後回しにせず、型を学びながら並行で育てる設計が取りやすいです。"))
+    else:
+        roadmap.append(("資産接続", "最初は企業案件で型を学び、その後で自分のブログやSNSを立ち上げる流れが現実的です。ゼロから自分発信だけで悩むより遠回りしにくいです。"))
+
+    return roadmap
+
+
+def build_lifestyle_image(work_hours: float, holiday_text: str, marital: str, child_status: str, child_count: str) -> str:
+    if work_hours <= 1.0:
+        base = "平日は30分〜1時間で下書きや整理を進め、休日にまとめて仕上げる形が現実的です。"
+    elif work_hours <= 2.0:
+        base = "平日は夜1〜2時間で進め、休日に構成や図解をまとめる流れが現実的です。"
+    else:
+        base = "平日にもまとまった時間を使えるので、納品・改善・自分の発信まで並行しやすい状態です。"
+
+    family = ""
+    if marital == "既婚" and child_status == "いる":
+        family = f"家庭との両立前提で進める必要があるので、子ども{child_count}人の生活リズムを崩さない範囲で『毎日少しずつ進む仕事』を優先した方が続きやすいです。"
+    elif marital == "既婚":
+        family = "家庭との両立前提で、急に大きく変えるより生活に乗る形にした方が続きやすいです。"
+
+    holiday = f"休日の過ごし方が『{holiday_text}』なら、それを崩しすぎない働き方に寄せる方が現実的です。" if holiday_text.strip() else "休日を全部作業に充てる前提ではなく、無理なく続く配分で考える方が現実的です。"
+
+    return f"{base}{family}{holiday}"
+
+
+def next_questions(current_revenue: str, best_revenue: str, target_income: int, ceiling: int) -> List[str]:
+    questions = []
+    if current_revenue == "0円":
+        questions.append("最初の納品実績をどのテーマで作るか")
+    else:
+        questions.append("今ある実績を、継続案件にどうつなげるか")
+
+    if best_revenue in ["実績なし", "0円"]:
+        questions.append("単発で終わらない入口案件をどう選ぶか")
+    else:
+        questions.append("過去の最高実績を再現性ある形にどう変えるか")
+
+    if ceiling < target_income:
+        questions.append("目標金額に対して、作業時間を増やすのか、単価を上げるのか")
+    else:
+        questions.append("目標到達後に、自分資産へどの順番で接続するか")
+
+    questions.append("自分の経験を、どの企業ニーズに変換するのが最短か")
+    return unique_keep_order(questions)[:4]
+
+
+def render_result_card(title: str, body: str) -> None:
+    st.markdown(
+        f"""
+        <div class="card">
+            <h3 style="margin-top:0;">{title}</h3>
+            <div class="lead">{body}</div>
         </div>
-        """, unsafe_allow_html=True)
-        st.divider()
+        """,
+        unsafe_allow_html=True,
+    )
 
-# ==========================================
-# STEP 3：別レールへの詳細ロードマップ
-# ==========================================
-if st.session_state.step2_done:
-    st.header("STEP 3: 別レールへの確実なロードマップ")
-    
-    st.markdown("""
-    <div class='step-box'>
-        <h3 style='margin-top:0;'>Phase 1【準備・確信】（最初の7〜14日間）</h3>
-        <p class='big-font'>まずはAIに対する「難しそう」というブロックを外します。Canvaの基本操作と、プロンプト（指示文）の型をなぞるだけで、「自分の手で質の高いものが作れた」という絶対的な確信を得る期間です。</p>
+
+st.title("個別専用キャリア設計図ロードマップ作成")
+st.markdown(
+    "<p class='lead'>Zoomで画面共有しながら、その場のヒアリング内容をもとに『何をやると、どう価値になり、どの順番で進めるか』を整理するためのシミュレーターです。見た目よりも、会話が前に進むことと、自分の場合が具体化されることを優先しています。</p>",
+    unsafe_allow_html=True,
+)
+st.divider()
+
+st.markdown("<div class='section-title'>1. 基本プロフィール</div>", unsafe_allow_html=True)
+col1, col2 = st.columns(2)
+with col1:
+    name = st.text_input("お名前", placeholder="例：山田 花子")
+    age = st.selectbox("年齢", AGE_OPTIONS, index=4)
+    current_job = st.selectbox("現在の職業", JOB_OPTIONS, index=0)
+    gender = st.selectbox("性別", GENDER_OPTIONS, index=0)
+with col2:
+    marital = st.selectbox("既婚・未婚", MARITAL_OPTIONS, index=0)
+    child_status = st.selectbox("お子様の有無", CHILD_OPTIONS, index=0)
+    child_count = st.selectbox("お子様の人数", CHILD_COUNT_OPTIONS, index=0)
+    region = st.selectbox("お住まいの地域", REGION_OPTIONS, index=2)
+
+career_text = st.text_area("これまでの経歴", height=100, placeholder="例：医療事務を7年、その後クリニック受付を3年。新人教育も担当。")
+
+st.divider()
+st.markdown("<div class='section-title'>2. 経験の棚卸し</div>", unsafe_allow_html=True)
+experiences = st.multiselect(
+    "経験のあること（仕事・副業・趣味で、少しでも触れたことがあれば選択してください）",
+    EXPERIENCE_OPTIONS,
+)
+
+blog_col1, blog_col2 = st.columns(2)
+with blog_col1:
+    blog_have = st.selectbox("ブログはお持ちですか", BLOG_HAVE_OPTIONS, index=1)
+with blog_col2:
+    blog_history = st.selectbox("ブログ運用歴", BLOG_HISTORY_OPTIONS, index=0)
+
+side_col1, side_col2 = st.columns(2)
+with side_col1:
+    side_history = st.selectbox("副業歴", SIDE_HISTORY_OPTIONS, index=0)
+with side_col2:
+    current_revenue = st.selectbox("現在の収益額", REVENUE_OPTIONS, index=0)
+
+best_revenue = st.selectbox("これまでに副業へ取り組んだことがあれば、最高実績を教えてください", ["実績なし"] + REVENUE_OPTIONS, index=0)
+
+st.divider()
+st.markdown("<div class='section-title'>3. 現在地と作業条件</div>", unsafe_allow_html=True)
+work_col1, work_col2 = st.columns(2)
+with work_col1:
+    work_hours = st.slider("1日に確保できる平均作業時間", min_value=0.5, max_value=5.0, value=2.0, step=0.5)
+with work_col2:
+    holiday_hours = st.selectbox("休日に確保しやすい時間", ["ほぼ取れない", "1〜2時間", "3〜4時間", "5時間以上"], index=1)
+
+holiday_style = st.text_area("休日の主な過ごし方", height=90, placeholder="例：家族と過ごす、買い物、子どもの習い事、家事をまとめる など")
+
+income_col1, income_col2 = st.columns(2)
+with income_col1:
+    annual_income = st.selectbox("現在の年収", ANNUAL_INCOME_OPTIONS, index=3)
+with income_col2:
+    household_income = st.selectbox("世帯年収", HOUSEHOLD_INCOME_OPTIONS, index=3)
+
+savings = st.selectbox("現在の貯金額（今後どのぐらい増えるかのお話もするためです）", SAVINGS_OPTIONS, index=2)
+
+st.divider()
+st.markdown("<div class='section-title'>4. 申し込み理由・今後の目標</div>", unsafe_allow_html=True)
+reasons = st.multiselect("個別相談に申し込んだ理由", REASON_OPTIONS)
+goals = st.multiselect("今後の目標・将来設計", GOAL_OPTIONS)
+why_now = st.text_area("なぜ、これから頑張ってみようと思いましたか？", height=90, placeholder="例：このまま今の働き方だけだと不安で、次の収入源を準備したい")
+hobbies = st.text_area("趣味・特技・少しでも興味があること", height=90, placeholder="例：旅行、健康、美容、家計管理、子育て、料理、SNSを見ること など")
+
+st.divider()
+st.markdown("<div class='section-title'>5. 収益シミュレーター</div>", unsafe_allow_html=True)
+target_label = st.select_slider("目標金額", options=list(TARGET_INCOME_OPTIONS.keys()), value="月5万円")
+target_income = TARGET_INCOME_OPTIONS[target_label]
+
+score = experience_score(experiences, side_history, current_revenue, best_revenue)
+months, forecast, ceiling, can_hit = build_simulation(target_income, work_hours, score)
+
+fig = go.Figure()
+fig.add_trace(
+    go.Bar(
+        x=months,
+        y=forecast,
+        name="6ヶ月までの見込み収益",
+        marker_color="#17324D",
+        hovertemplate="%{x}<br>見込み収益: <b>%{y:,.0f}円</b><extra></extra>",
+    )
+)
+fig.add_trace(
+    go.Scatter(
+        x=months,
+        y=[target_income] * len(months),
+        mode="lines",
+        name="目標金額",
+        line=dict(color="#C77D1A", width=3, dash="dash"),
+        hovertemplate="目標: <b>%{y:,.0f}円</b><extra></extra>",
+    )
+)
+fig.update_layout(
+    height=420,
+    margin=dict(l=20, r=20, t=30, b=20),
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    hovermode="x unified",
+)
+fig.update_yaxes(title_text="月間収益額（円）", tickformat=",d", gridcolor="rgba(0,0,0,0.08)")
+fig.update_xaxes(showgrid=False)
+st.plotly_chart(fig, use_container_width=True)
+
+if can_hit:
+    sim_comment = f"今の条件だと、6ヶ月時点で<span class='em'>{ceiling:,}円前後</span>が見込みラインです。目標の{target_label}は射程圏です。"
+else:
+    sim_comment = f"今の条件だと、6ヶ月時点の見込みラインは<span class='em'>{ceiling:,}円前後</span>です。目標の{target_label}とは差があるので、まずは到達しやすい土台づくりから設計した方が現実的です。"
+
+st.markdown(
+    f"""
+    <div class="card">
+        <div class="lead">{sim_comment}<br><br>
+        いきなり大きく狙うより、<span class="em">3ヶ月で3〜5万円の土台</span>を作り、その後に継続案件・単価アップ・自分資産への接続を考える方が、個別相談の場でも説明しやすく、現実感があります。</div>
     </div>
-    <div class='step-box'>
-        <h3 style='margin-top:0;'>Phase 2【実践・報酬獲得】（1ヶ月〜3ヶ月目）</h3>
-        <p class='big-font'>ハードルの低い現実的な案件（1万円〜1.5万円）を実際に受注し、プロのサポートを受けながら納品します。「自分の経験がお金に変わる」成功体験を積み、売れる構成（型）を脳にインストールします。</p>
-    </div>
-    <div class='step-box'>
-        <h3 style='margin-top:0;'>Phase 3【ディレクターへの昇華】（3ヶ月〜6ヶ月目）</h3>
-        <p class='big-font'>作業の8割をAIとテンプレートに任せます。あなたは「作業者」を卒業し、クライアントに「こういう画像もセットにしましょう」と提案する「設計・判断」の側に回ります。ここで、同じ稼働時間でも収益が数倍に跳ね上がります。</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.session_state.step3_done = True
+    """,
+    unsafe_allow_html=True,
+)
+
+if st.button("個別専用キャリア設計図を作成する"):
+    st.session_state.generated = True
+
+if st.session_state.generated:
+    display_name = name.strip() if name.strip() else "この方"
+    strength_summary = build_strength_summary(current_job, experiences, career_text)
+    entry_tasks = pick_entry_tasks(current_job, experiences)
+    markets = pick_markets(current_job, hobbies, goals + reasons)
+    roadmap = build_roadmap(work_hours, blog_have, side_history, score)
+    lifestyle = build_lifestyle_image(work_hours, holiday_style, marital, child_status, child_count)
+    followup_questions = next_questions(current_revenue, best_revenue, target_income, ceiling)
+
     st.divider()
+    st.markdown("<div class='section-title'>作成結果</div>", unsafe_allow_html=True)
 
-# ==========================================
-# STEP 4：やらないことリストと行動喚起
-# ==========================================
-if st.session_state.step3_done:
-    st.header("STEP 4: 『やらないことリスト』の宣誓")
-    st.markdown("<p class='big-font'>成功を確実にするため、以下の「失敗する人の共通点」を今後一切やめると約束してください。すべてチェックを入れると次へ進めます。</p>", unsafe_allow_html=True)
-    
-    c1 = st.checkbox("独学で無料のYouTubeやブログを漁り、時間をドブに捨てるのをやめる")
-    c2 = st.checkbox("「1文字1円」のような低単価な労働で、自らの命（時間）を安売りするのをやめる")
-    c3 = st.checkbox("「自分にはセンスがないから」と、始める前から言い訳をするのをやめる")
-    c4 = st.checkbox("完璧主義に陥り、100点になるまでいつまでも行動しないのをやめる")
-    c5 = st.checkbox("孤独に一人で悩み、誰にも相談せずに立ち止まるのをやめる")
-    c6 = st.checkbox("すぐに一攫千金が手に入るという、安っぽい魔法を信じるのをやめる")
-    c7 = st.checkbox("「自分の今までの人生経験には価値がない」と思い込むのをやめる")
-    
-    if c1 and c2 and c3 and c4 and c5 and c6 and c7:
-        st.markdown("<p class='big-font highlight' style='text-align:center; margin-top:30px;'>覚悟が決まりましたね。独学の自腹はもう終わりです。あなたに必要なのは、正しい方向へ導く『環境』です。</p>", unsafe_allow_html=True)
-        
-        # ウェブステの伴走環境へ導くCTA
-        st.markdown("""
-        <a href="#" style="text-decoration:none;">
-            <div style="background-color:#1A365D; color:#FFFFFF; text-align:center; padding:20px; font-size:24px; font-weight:bold; border-radius:8px; margin-top:20px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
-                🤝 ウェブステの伴走環境で進む
+    summary_text = (
+        f"{display_name}さんは、現在『{current_job}』の文脈が軸です。"
+        f"経験としては『{ '、'.join(experiences[:6]) if experiences else '未整理の経験も含めて棚卸し余地あり' }』があり、"
+        f"現状の作業時間は1日あたり{work_hours}時間。"
+        f"目標は{target_label}で、今の条件だと6ヶ月時点の見込みラインは{ceiling:,}円前後です。"
+    )
+    render_result_card("今の土台から見えること", summary_text + "<br><br>" + strength_summary)
+
+    task_lines = []
+    for title, desc in entry_tasks:
+        task_lines.append(f"<div class='mini-card'><b>{title}</b><br><span class='lead'>{desc}</span></div>")
+    render_result_card("あなたの経験が高単価な価値に変わる具体的な業務", "".join(task_lines))
+
+    market_text = "、".join(markets) if markets else "業務整理・情報整理・説明コンテンツ"
+    render_result_card(
+        "最初に狙いやすい市場・テーマ",
+        f"最初から何でも狙うより、<span class='em'>{market_text}</span>のように、今の経験や興味とつながる分野から入る方が遠回りしにくいです。企業案件で型を学び、その型をあとから自分のブログやSNSへ移す流れが作りやすいです。",
+    )
+
+    roadmap_html = ""
+    for phase_title, phase_desc in roadmap:
+        roadmap_html += f"<div class='mini-card'><b>{phase_title}</b><br><span class='lead'>{phase_desc}</span></div>"
+    render_result_card("90日ロードマップ", roadmap_html)
+
+    render_result_card("日々のライフスタイルイメージ", lifestyle)
+
+    if can_hit:
+        income_text = (
+            f"今の条件なら、まずは3ヶ月で{forecast[2]:,}円前後、6ヶ月で{forecast[-1]:,}円前後を目安に設計できます。"
+            f" ここで大事なのは、時間を増やすことよりも、同じ時間で出せる価値を上げることです。"
+        )
+    else:
+        income_text = (
+            f"今の条件だと、3ヶ月時点の現実ラインは{forecast[2]:,}円前後、6ヶ月時点で{forecast[-1]:,}円前後です。"
+            f" なので最初の会話では、目標の{target_label}をすぐ約束するより、まずは土台の収益ラインを作る設計を出した方が自然です。"
+        )
+    render_result_card("収益ラインの見通し", income_text)
+
+    next_html = "".join([f"<div class='mini-card'>{i+1}. {q}</div>" for i, q in enumerate(followup_questions)])
+    render_result_card("個別相談で次に詰めるべきこと", next_html)
+
+    st.markdown(
+        """
+        <div class="card">
+            <h3 style="margin-top:0;">クローザー用メモ</h3>
+            <div class="lead">
+            ・このツールは、相手に入力させる前提ではなく、会話しながらこちらが動かす前提です。<br>
+            ・収益だけで押すより、『どの経験を、どの市場で、どの順番で価値に変えるか』を主軸に話した方が自然です。<br>
+            ・ゴールは説得ではなく、『自分の場合はここを詰めないと前に進めない』と相手が判断できる状態を作ることです。
             </div>
-        </a>
-        <p style="text-align:center; margin-top:10px; color:#718096; font-size:14px;">※ここから先は、本気で人生のレールを乗り換える方のみお進みください。</p>
-        """, unsafe_allow_html=True)
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
