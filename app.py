@@ -60,6 +60,49 @@ st.markdown(
         margin-top: 10px;
         margin-bottom: 8px;
     }
+    .timeline {
+        position: relative;
+        margin-top: 8px;
+        padding-left: 18px;
+    }
+    .timeline:before {
+        content: "";
+        position: absolute;
+        left: 8px;
+        top: 8px;
+        bottom: 8px;
+        width: 2px;
+        background: #D8DEE8;
+    }
+    .timeline-item {
+        position: relative;
+        background: #FFFFFF;
+        border: 1px solid #E6E8EC;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+    }
+    .timeline-item:before {
+        content: "";
+        position: absolute;
+        left: -16px;
+        top: 16px;
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #17324D;
+        border: 2px solid #F7F8FA;
+    }
+    .timeline-label {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 700;
+        color: #17324D;
+        background: #EEF4FB;
+        padding: 4px 8px;
+        border-radius: 999px;
+        margin-bottom: 8px;
+    }
     .stButton > button {
         width: 100%;
         border-radius: 12px;
@@ -312,6 +355,14 @@ def get_experience_multiplier(score: int) -> float:
     return 1.18
 
 
+def get_target_uplift(score: int) -> float:
+    if score <= 4:
+        return 1.15
+    if score <= 10:
+        return 1.18
+    return 1.20
+
+
 def hours_to_ceiling(hours: float) -> int:
     base_map = {
         0.5: 18000,
@@ -330,11 +381,46 @@ def hours_to_ceiling(hours: float) -> int:
 
 def build_simulation(target_income: int, work_hours: float, score: int) -> Tuple[List[str], List[int], int, bool]:
     months = ["1ヶ月目", "2ヶ月目", "3ヶ月目", "4ヶ月目", "5ヶ月目", "6ヶ月目"]
-    ceiling = int(hours_to_ceiling(work_hours) * get_experience_multiplier(score))
-    progress = [0.22, 0.48, 0.68, 0.82, 0.93, 1.00]
+    base_ceiling = int(hours_to_ceiling(work_hours) * get_experience_multiplier(score))
+    uplifted_target = int(round(target_income * get_target_uplift(score) / 1000) * 1000)
+    ceiling = max(base_ceiling, uplifted_target)
+    progress = [0.24, 0.46, 0.64, 0.81, 0.93, 1.00]
     forecast = [int(round(ceiling * p / 1000) * 1000) for p in progress]
     can_hit = ceiling >= target_income
     return months, forecast, ceiling, can_hit
+
+
+def build_long_term_projection(monthly_end: int, score: int, work_hours: float) -> Tuple[List[str], List[int], List[int]]:
+    years = ["1年目", "2年目", "3年目", "4年目", "5年目"]
+
+    if work_hours <= 1.0:
+        growth_curve = [0.95, 1.18, 1.35, 1.50, 1.62]
+    elif work_hours <= 2.0:
+        growth_curve = [1.00, 1.28, 1.52, 1.72, 1.90]
+    else:
+        growth_curve = [1.05, 1.35, 1.65, 1.92, 2.15]
+
+    score_bonus = 0.00
+    if score >= 8:
+        score_bonus = 0.06
+    if score >= 13:
+        score_bonus = 0.10
+
+    annuals: List[int] = []
+    for idx, base in enumerate(growth_curve):
+        factor = base + score_bonus
+        annual = int(round((monthly_end * factor * 12) / 10000) * 10000)
+        if idx > 0 and annual <= annuals[-1]:
+            annual = annuals[-1] + 120000
+        annuals.append(annual)
+
+    cumulative: List[int] = []
+    running = 0
+    for annual in annuals:
+        running += annual
+        cumulative.append(running)
+
+    return years, annuals, cumulative
 
 
 def pick_entry_tasks(job: str, experiences: List[str]) -> List[Tuple[str, str]]:
@@ -470,8 +556,8 @@ def build_strength_summary(job: str, experiences: List[str], career_text: str) -
 
     career_hint = career_text.strip()
     if career_hint:
-        return f"{job}としての経験や『{career_hint[:40]}』の文脈を見ると、{ '、'.join(strengths[:3]) }が強みとして活かしやすい状態です。"
-    return f"{job}としての経験を見ると、{ '、'.join(strengths[:3]) }が強みとして活かしやすい状態です。"
+        return f"{job}としての経験や『{career_hint[:40]}』の文脈を見ると、{'、'.join(strengths[:3])}が強みとして活かしやすい状態です。"
+    return f"{job}としての経験を見ると、{'、'.join(strengths[:3])}が強みとして活かしやすい状態です。"
 
 
 def pick_markets(job: str, hobbies: str, reasons: List[str]) -> List[str]:
@@ -531,17 +617,15 @@ def build_roadmap(work_hours: float, blog_have: str, side_history: str, exp_scor
     else:
         phase3_text = "稼働時間を取りやすいので、記事・図解・導線改善のように複数の納品パターンを持ちやすい状態です。6ヶ月時点で継続案件を複数持ち、企業案件で学んだ型を自分資産へ移す動きを並行できます。"
 
-    phase3 = ("31〜90日", phase2_text)
-    phase4 = ("3〜6ヶ月", phase3_text)
-
-    roadmap = [phase1, phase3, phase4]
+    phase2 = ("31〜60日", phase2_text)
+    phase3 = ("61〜90日", phase3_text)
 
     if blog_have == "持っている":
-        roadmap.append(("資産接続", "企業案件で使った構成や導線の型を、自分のブログやSNSにも移植します。自分の発信を後回しにせず、型を学びながら並行で育てる設計が取りやすいです。"))
+        phase4 = ("90日以降の伸ばし方", "企業案件で使った構成や導線の型を、自分のブログやSNSにも移植します。自分の発信を後回しにせず、型を学びながら並行で育てる設計が取りやすいです。")
     else:
-        roadmap.append(("資産接続", "最初は企業案件で型を学び、その後で自分のブログやSNSを立ち上げる流れが現実的です。ゼロから自分発信だけで悩むより遠回りしにくいです。"))
+        phase4 = ("90日以降の伸ばし方", "最初は企業案件で型を学び、その後で自分のブログやSNSを立ち上げる流れが現実的です。ゼロから自分発信だけで悩むより遠回りしにくいです。")
 
-    return roadmap
+    return [phase1, phase2, phase3, phase4]
 
 
 def build_lifestyle_image(work_hours: float, holiday_text: str, marital: str, child_status: str, child_count: str) -> str:
@@ -563,25 +647,21 @@ def build_lifestyle_image(work_hours: float, holiday_text: str, marital: str, ch
     return f"{base}{family}{holiday}"
 
 
-def next_questions(current_revenue: str, best_revenue: str, target_income: int, ceiling: int) -> List[str]:
-    questions = []
-    if current_revenue == "0円":
-        questions.append("最初の納品実績をどのテーマで作るか")
-    else:
-        questions.append("今ある実績を、継続案件にどうつなげるか")
+def build_inaction_risk(current_job: str, work_hours: float, goals: List[str], reasons: List[str]) -> str:
+    risk_lines = [
+        f"今の『{current_job}』の延長だけで数年が過ぎると、経験は増えても、それが副収入や資産に変わらないまま終わりやすいです。",
+        "特に、日々の忙しさに流されると『判断はしているのに積み上がっていない』状態が続きやすくなります。",
+    ]
 
-    if best_revenue in ["実績なし", "0円"]:
-        questions.append("単発で終わらない入口案件をどう選ぶか")
+    if work_hours <= 1.0:
+        risk_lines.append("時間が限られる人ほど、自己流で遠回りすると、1年後も『やろうと思っていたのに進んでいない』に戻りやすいです。")
     else:
-        questions.append("過去の最高実績を再現性ある形にどう変えるか")
+        risk_lines.append("時間が取れるのに型なしで進めると、頑張っているのに単発作業ばかり増えて、継続収益に繋がりにくくなります。")
 
-    if ceiling < target_income:
-        questions.append("目標金額に対して、作業時間を増やすのか、単価を上げるのか")
-    else:
-        questions.append("目標到達後に、自分資産へどの順番で接続するか")
+    if "将来の収入不安に備えたい" in reasons or "会社以外の収入源を持ちたい" in goals:
+        risk_lines.append("収入源を増やす準備を後回しにすると、不安が消えるどころか、仕事や家庭の変化が来た時に選択肢が少ないままになります。")
 
-    questions.append("自分の経験を、どの企業ニーズに変換するのが最短か")
-    return unique_keep_order(questions)[:4]
+    return "".join(risk_lines)
 
 
 def render_result_card(title: str, body: str) -> None:
@@ -590,6 +670,27 @@ def render_result_card(title: str, body: str) -> None:
         <div class="card">
             <h3 style="margin-top:0;">{title}</h3>
             <div class="lead">{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_timeline_card(title: str, roadmap: List[Tuple[str, str]]) -> None:
+    items_html = ""
+    for phase_title, phase_desc in roadmap:
+        items_html += f"""
+        <div class="timeline-item">
+            <div class="timeline-label">{phase_title}</div>
+            <div class="lead">{phase_desc}</div>
+        </div>
+        """
+
+    st.markdown(
+        f"""
+        <div class="card">
+            <h3 style="margin-top:0;">{title}</h3>
+            <div class="timeline">{items_html}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -671,6 +772,7 @@ target_income = TARGET_INCOME_OPTIONS[target_label]
 
 score = experience_score(experiences, side_history, current_revenue, best_revenue)
 months, forecast, ceiling, can_hit = build_simulation(target_income, work_hours, score)
+long_years, annual_projection, cumulative_projection = build_long_term_projection(ceiling, score, work_hours)
 
 fig = go.Figure()
 fig.add_trace(
@@ -704,16 +806,17 @@ fig.update_yaxes(title_text="月間収益額（円）", tickformat=",d", gridcol
 fig.update_xaxes(showgrid=False)
 st.plotly_chart(fig, use_container_width=True)
 
+uplift_rate = round((ceiling / target_income - 1) * 100)
 if can_hit:
-    sim_comment = f"今の条件だと、6ヶ月時点で<span class='em'>{ceiling:,}円前後</span>が見込みラインです。目標の{target_label}は射程圏です。"
+    sim_comment = f"今の条件だと、6ヶ月時点で<span class='em'>{ceiling:,}円前後</span>が見込みラインです。目標の{target_label}を<span class='em'>約{uplift_rate}%上回る</span>水準で着地する設計にしています。"
 else:
-    sim_comment = f"今の条件だと、6ヶ月時点の見込みラインは<span class='em'>{ceiling:,}円前後</span>です。目標の{target_label}とは差があるので、まずは到達しやすい土台づくりから設計した方が現実的です。"
+    sim_comment = f"今の条件だと、6ヶ月時点の見込みラインは<span class='em'>{ceiling:,}円前後</span>です。今回は目標の{target_label}を基準に、少し上振れしたラインまで見える形で設計しています。"
 
 st.markdown(
     f"""
     <div class="card">
         <div class="lead">{sim_comment}<br><br>
-        いきなり大きく狙うより、<span class="em">3ヶ月で3〜5万円の土台</span>を作り、その後に継続案件・単価アップ・自分資産への接続を考える方が、個別相談の場でも説明しやすく、現実感があります。</div>
+        いきなり大きく狙うより、<span class="em">3ヶ月で土台を作り、6ヶ月で目標を少し上回るライン</span>を見ながら進める方が、面談でも未来を具体的に描きやすいです。</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -729,14 +832,14 @@ if st.session_state.generated:
     markets = pick_markets(current_job, hobbies, goals + reasons)
     roadmap = build_roadmap(work_hours, blog_have, side_history, score)
     lifestyle = build_lifestyle_image(work_hours, holiday_style, marital, child_status, child_count)
-    followup_questions = next_questions(current_revenue, best_revenue, target_income, ceiling)
+    inaction_risk = build_inaction_risk(current_job, work_hours, goals, reasons)
 
     st.divider()
     st.markdown("<div class='section-title'>作成結果</div>", unsafe_allow_html=True)
 
     summary_text = (
         f"{display_name}さんは、現在『{current_job}』の文脈が軸です。"
-        f"経験としては『{ '、'.join(experiences[:6]) if experiences else '未整理の経験も含めて棚卸し余地あり' }』があり、"
+        f"経験としては『{'、'.join(experiences[:6]) if experiences else '未整理の経験も含めて棚卸し余地あり'}』があり、"
         f"現状の作業時間は1日あたり{work_hours}時間。"
         f"目標は{target_label}で、今の条件だと6ヶ月時点の見込みラインは{ceiling:,}円前後です。"
     )
@@ -753,38 +856,58 @@ if st.session_state.generated:
         f"最初から何でも狙うより、<span class='em'>{market_text}</span>のように、今の経験や興味とつながる分野から入る方が遠回りしにくいです。企業案件で型を学び、その型をあとから自分のブログやSNSへ移す流れが作りやすいです。",
     )
 
-    roadmap_html = ""
-    for phase_title, phase_desc in roadmap:
-        roadmap_html += f"<div class='mini-card'><b>{phase_title}</b><br><span class='lead'>{phase_desc}</span></div>"
-    render_result_card("90日ロードマップ", roadmap_html)
+    render_timeline_card("90日ロードマップ", roadmap)
 
     render_result_card("日々のライフスタイルイメージ", lifestyle)
 
-    if can_hit:
-        income_text = (
-            f"今の条件なら、まずは3ヶ月で{forecast[2]:,}円前後、6ヶ月で{forecast[-1]:,}円前後を目安に設計できます。"
-            f" ここで大事なのは、時間を増やすことよりも、同じ時間で出せる価値を上げることです。"
-        )
-    else:
-        income_text = (
-            f"今の条件だと、3ヶ月時点の現実ラインは{forecast[2]:,}円前後、6ヶ月時点で{forecast[-1]:,}円前後です。"
-            f" なので最初の会話では、目標の{target_label}をすぐ約束するより、まずは土台の収益ラインを作る設計を出した方が自然です。"
-        )
+    income_text = (
+        f"今の条件なら、3ヶ月時点で{forecast[2]:,}円前後、6ヶ月で{forecast[-1]:,}円前後を目安に設計できます。"
+        f" 今回は目標の{target_label}をそのままなぞるのではなく、6ヶ月時点で約{uplift_rate}%上回るラインまで見えるようにしてあります。"
+        f" ここで大事なのは、時間を増やすことだけではなく、整理・構成・図解のような『単価が落ちにくい仕事』へ寄せることです。"
+    )
     render_result_card("収益ラインの見通し", income_text)
 
-    next_html = "".join([f"<div class='mini-card'>{i+1}. {q}</div>" for i, q in enumerate(followup_questions)])
-    render_result_card("個別相談で次に詰めるべきこと", next_html)
-
-    st.markdown(
-        """
-        <div class="card">
-            <h3 style="margin-top:0;">クローザー用メモ</h3>
-            <div class="lead">
-            ・このツールは、相手に入力させる前提ではなく、会話しながらこちらが動かす前提です。<br>
-            ・収益だけで押すより、『どの経験を、どの市場で、どの順番で価値に変えるか』を主軸に話した方が自然です。<br>
-            ・ゴールは説得ではなく、『自分の場合はここを詰めないと前に進めない』と相手が判断できる状態を作ることです。
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_result_card(
+        "このまま取り組まなかった場合に起こりやすいこと",
+        inaction_risk,
     )
+
+    future_text = (
+        f"だからこそ、{display_name}さんは『思いつきで頑張る』のではなく、"
+        f"今ある経験を企業ニーズに変換しながら、型を学んで積み上げる進み方が合っています。"
+        f" この流れで進むと、<span class='em'>1年目は{annual_projection[0]:,}円前後、2年目は{annual_projection[1]:,}円前後</span>を目安に伸ばしやすく、"
+        f" 5年累計では<span class='em'>{cumulative_projection[-1]:,}円前後</span>の積み上がりが見えてきます。"
+    )
+    render_result_card("だから、このような取り組み方で前へ進みましょう", future_text)
+
+    long_fig = go.Figure()
+    long_fig.add_trace(
+        go.Bar(
+            x=long_years,
+            y=annual_projection,
+            name="年間収益",
+            marker_color="#17324D",
+            hovertemplate="%{x}<br>年間収益: <b>%{y:,.0f}円</b><extra></extra>",
+        )
+    )
+    long_fig.add_trace(
+        go.Scatter(
+            x=long_years,
+            y=cumulative_projection,
+            mode="lines+markers",
+            name="累計収益",
+            line=dict(color="#C77D1A", width=3),
+            hovertemplate="%{x}<br>累計収益: <b>%{y:,.0f}円</b><extra></extra>",
+        )
+    )
+    long_fig.update_layout(
+        height=430,
+        margin=dict(l=20, r=20, t=30, b=20),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        hovermode="x unified",
+    )
+    long_fig.update_yaxes(title_text="収益額（円）", tickformat=",d", gridcolor="rgba(0,0,0,0.08)")
+    long_fig.update_xaxes(showgrid=False)
+    st.plotly_chart(long_fig, use_container_width=True)
