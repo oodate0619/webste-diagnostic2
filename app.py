@@ -1126,4 +1126,4 @@ if st.session_state.generated:
         f"5年累計では<span class='accent-yellow'>{cumulative_projection[-1]:,}円前後</span>まで積み上がる見立てです。"
         " ここで重要なのは、作業時間だけで伸ばすのではなく、整理・構成・図解のように単価が落ちにくい作業へ寄せることです。"
     )
-    render_result_card("1〜5年の収益見通しの要約", long_summary)
+    render_result_card("1〜5年の収益見通し", long_summary)
